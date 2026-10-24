@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#008069">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hablemos">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<title>Hablemos · Chat para todos</title>
+<style>
+:root{--g:#008069;--g2:#00a884;--bg:#efeae2;--out:#d9fdd3;--ink:#111b21;--mut:#667781;--ln:#e9edef;--f:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font:15px/1.4 var(--f);color:var(--ink);background:#d1d7db}
+#app{height:100%;max-width:720px;margin:0 auto;background:#fff;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.view{display:flex;flex-direction:column;height:100%}[hidden]{display:none!important}
+.top{background:var(--g);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 12px;display:flex;align-items:center;gap:12px}
+.top h1{margin:0;font-size:1.3rem;flex:1}.top .t2{flex:1;min-width:0;cursor:pointer}.top .t2 b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top .t2 small{opacity:.85;font-size:.78rem}
+.ib{background:none;border:0;color:#fff;font-size:1.5rem;cursor:pointer;padding:2px 6px}
+.av{width:44px;height:44px;border-radius:50%;color:#fff;font-weight:700;font-size:1.2rem;display:grid;place-items:center;flex:none}
+.top .av{width:38px;height:38px;font-size:1rem}
+#lista{flex:1;overflow:auto}
+.it{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--ln);cursor:pointer}.it:active{background:#f5f6f6}
+.mid{flex:1;min-width:0}.mid b{display:block}.mid span{display:block;color:var(--mut);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt{text-align:right;color:var(--mut);font-size:.75rem}.dot{display:block;width:12px;height:12px;border-radius:50%;background:var(--g2);margin:6px 0 0 auto}
+.fab{position:absolute;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:16px;border:0;background:var(--g2);color:#fff;font-size:1.8rem;box-shadow:0 3px 10px rgba(0,0,0,.3);cursor:pointer}
+#msgs{flex:1;overflow:auto;background:var(--bg);padding:10px 10px 6px;display:flex;flex-direction:column;gap:3px}
+.m{max-width:82%;background:#fff;border-radius:10px 10px 10px 2px;padding:6px 9px 4px;box-shadow:0 1px 1px rgba(0,0,0,.12);align-self:flex-start;word-wrap:break-word;overflow-wrap:anywhere}
+.m.yo{background:var(--out);align-self:flex-end;border-radius:10px 10px 2px 10px}
+.m b{display:block;font-size:.8rem}.m span{white-space:pre-wrap}.m small{color:var(--mut);font-size:.68rem;margin-left:8px;float:right;margin-top:6px}
+.ac{clear:both;padding-top:4px}.ac button{border:0;background:#0000000f;border-radius:8px;padding:5px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+.vacio{margin:auto;color:var(--mut);background:#fff8;padding:8px 14px;border-radius:12px}
+.comp{display:flex;gap:8px;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:#f0f2f5}
+.comp input{flex:1;border:0;border-radius:22px;padding:11px 16px;font:inherit;background:#fff}
+.comp button{width:46px;height:46px;border-radius:50%;border:0;background:var(--g2);color:#fff;font-size:1.3rem;cursor:pointer}
+.login{padding:30px 22px;margin:auto 0}.login h1{color:var(--g);font-size:2rem;margin:0 0 6px}
+input.f{width:100%;padding:13px;font:inherit;border:2px solid var(--ln);border-radius:12px;margin:14px 0 8px}input.f:focus{border-color:var(--g2);outline:0}
+.btn{width:100%;padding:14px;border:0;border-radius:999px;background:var(--g2);color:#fff;font:700 1rem var(--f);cursor:pointer}
+.btn.g{background:#fff;color:var(--g);border:2px solid var(--g);margin-top:8px}.err{color:#d33;min-height:1.3em;margin:4px 0}.note{color:var(--mut);font-size:.82rem}
+dialog{border:0;border-radius:18px;width:min(330px,92vw);padding:20px;font-family:var(--f)}dialog::backdrop{background:#0008}
+dialog .btn{margin-top:10px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#111b21;color:#fff;padding:9px 16px;border-radius:999px;z-index:30;max-width:90%}
+</style>
+</head>
+<body>
+<div id="app">
+  <section class="view" id="v-login" hidden>
+    <div class="login">
+      <h1>Hablemos 💬</h1>
+      <p>Chat para todos. Elegí un nombre de usuario para empezar.</p>
+      <input class="f" id="nick" maxlength="20" placeholder="Tu nombre de usuario" autocomplete="off" autocapitalize="none">
+      <p class="err" id="lerr"></p>
+      <button class="btn" id="entrar">Entrar</button>
+      <p class="note" style="margin-top:14px">⚠️ No compartas datos personales (dirección, teléfono, contraseñas). Los chats no son privados: no los uses para secretos.</p>
+    </div>
+  </section>
+
+  <section class="view" id="v-list" hidden>
+    <div class="top"><h1>Hablemos</h1><div id="yo"></div></div>
+    <div id="lista"></div>
+    <button class="fab" id="mas" aria-label="Nuevo chat">+</button>
+  </section>
+
+  <section class="view" id="v-chat" hidden>
+    <div class="top"><button class="ib" id="atras" aria-label="Volver">←</button><div id="cav"></div><div class="t2" id="ctit"><b id="ct"></b><small id="cs"></small></div></div>
+    <div id="msgs"></div>
+    <div class="comp"><input id="txt" maxlength="500" placeholder="Escribí un mensaje" autocomplete="off"><button id="env" aria-label="Enviar">➤</button></div>
+  </section>
+</div>
+
+<dialog id="menu">
+  <b>Nuevo chat</b>
+  <button class="btn" data-m="dm">💬 Chatear con alguien</button>
+  <button class="btn" data-m="grupo">👥 Crear un grupo</button>
+  <button class="btn" data-m="unir">🔑 Unirme con código</button>
+  <button class="btn g" data-m="salir">🚪 Cerrar sesión</button>
+  <button class="btn g" data-m="x">Cancelar</button>
+</dialog>
+<dialog id="dlg">
+  <b id="pt"></b><input class="f" id="pi" autocomplete="off"><p class="err" id="pe"></p>
+  <button class="btn" id="pok">Aceptar</button><button class="btn g" id="pno">Cancelar</button>
+</dialog>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,collection,doc,getDoc,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limitToLast,where,arrayUnion} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ===== Configuración: tu Firebase (podés usar el mismo proyecto o uno nuevo) ===== */
+const FIREBASE={apiKey:"AIzaSyDaJT2oM4y2YaPM5i5XlZ6MWRWKNJI6-nI",authDomain:"buffet-4p.firebaseapp.com",projectId:"buffet-4p",storageBucket:"buffet-4p.firebasestorage.app",messagingSenderId:"925951291927",appId:"1:925951291927:web:a13f6762d25a0713c56252"};
+const db=getFirestore(initializeApp(FIREBASE));
+
+const $=s=>document.querySelector(s),K=n=>n.toLowerCase();
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const color=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return `hsl(${h} 45% 42%)`};
+const av=n=>`<div class="av" style="background:${color(n)}">${esc(Array.from(n)[0].toUpperCase())}</div>`;
+const hora=t=>{const d=new Date(t),h=d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?h:d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+h};
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2500)}
+function ver(v){['login','list','chat'].forEach(x=>$('#v-'+x).hidden=x!==v)}
+
+let me=ls('hb_me',null),read=ls('hb_read',{}),gen={},mine=[],cur=null,curS=null,msgs=[],unM=null,primero=true,ultimo=0;
+const uid=()=>{let u=ls('hb_uid',null);if(!u){u=crypto.randomUUID();sv('hb_uid',u)}return u};
+
+/* ===== Entrar ===== */
+$('#entrar').onclick=async()=>{
+  const n=$('#nick').value.trim(),e=$('#lerr');
+  if(!/^\w{3,20}$/.test(n))return e.textContent='Usá 3 a 20 letras, números o _ (sin espacios ni tildes).';
+  try{
+    const r=doc(db,'usuarios',K(n)),s=await getDoc(r),u=uid();
+    if(s.exists()&&s.data().uid!==u)return e.textContent='Ese nombre ya está en uso. Probá otro.';
+    await setDoc(r,{nick:n,uid:u,creado:Date.now()});me={nick:n,uid:u};sv('hb_me',me);iniciar();
+  }catch(x){console.error(x);e.textContent='No se pudo conectar. Revisá tu internet.'}
+};
+$('#nick').onkeydown=e=>{if(e.key==='Enter')$('#entrar').click()};
+
+/* ===== Lista de chats ===== */
+function titulo(s){return s.tipo==='general'?'General':s.tipo==='dm'?((s.nicks||{})[(s.miembros||[]).find(m=>m!==K(me.nick))]||'Chat'):(s.nombre||'Grupo')}
+function pintarLista(){
+  const a=[{...gen,id:'general',tipo:'general'},...mine].sort((x,y)=>(y.ultimo?.t||0)-(x.ultimo?.t||0));
+  $('#lista').innerHTML=a.map(s=>{const t=titulo(s),u=s.ultimo,nuevo=u&&u.t>(read[s.id]||0)&&u.nick!==me.nick;
+    return `<div class="it" data-id="${s.id}">${av(t)}<div class="mid"><b>${s.tipo==='general'?'🌎 ':s.tipo==='grupo'?'👥 ':''}${esc(t)}</b><span>${u?esc(u.nick===me.nick?'Vos':u.nick)+': '+esc(u.texto):'Sin mensajes todavía'}</span></div><div class="rt">${u?hora(u.t):''}${nuevo?'<i class="dot"></i>':''}</div></div>`}).join('');
+}
+function iniciar(){
+  ver('list');$('#yo').innerHTML=av(me.nick);
+  setDoc(doc(db,'salas','general'),{tipo:'general',nombre:'General'},{merge:true}).catch(()=>{});
+  onSnapshot(doc(db,'salas','general'),d=>{gen=d.data()||{};pintarLista()});
+  onSnapshot(query(collection(db,'salas'),where('miembros','array-contains',K(me.nick))),s=>{mine=s.docs.map(d=>({id:d.id,...d.data()}));pintarLista()},e=>console.error(e));
+}
+$('#lista').onclick=e=>{const i=e.target.closest('.it');if(i)abrir(i.dataset.id)};
+
+/* ===== Chat ===== */
+function abrir(id,s){
+  s=s||(id==='general'?{...gen,id,tipo:'general'}:mine.find(x=>x.id===id));if(!s)return;
+  cur=id;curS=s;primero=true;history.pushState({c:id},'');ver('chat');
+  const t=titulo(s);$('#cav').innerHTML=av(t);$('#ct').textContent=t;
+  $('#cs').textContent=s.tipo==='grupo'?'Código: '+id+' · tocá para copiar':s.tipo==='general'?'Chat público de todos':'';
+  $('#msgs').innerHTML='';unM&&unM();
+  unM=onSnapshot(query(collection(db,'salas',id,'mensajes'),orderBy('t'),limitToLast(100)),snap=>{
+    msgs=snap.docs.map(d=>({id:d.id,...d.data()}));pintar();
+    read[id]=Date.now();sv('hb_read',read);
+  },e=>{console.error(e);toast('No se pudo cargar el chat')});
+}
+function cerrar(){unM&&unM();unM=null;cur=null;ver('list');pintarLista()}
+function pintar(){
+  const b=$('#msgs'),cerca=b.scrollHeight-b.scrollTop-b.clientHeight<120,dm=curS.tipo==='dm';
+  b.innerHTML=msgs.length?msgs.map(m=>{const yo=m.uid===me.uid;
+    return `<div class="m${yo?' yo':''}" data-id="${m.id}">${!yo&&!dm?`<b style="color:${color(m.nick)}">${esc(m.nick)}</b>`:''}<span>${esc(m.texto)}</span><small>${hora(m.t)}</small><div class="ac" hidden><button data-a="${yo?'del':'rep'}">${yo?'🗑️ Eliminar':'🚩 Reportar'}</button></div></div>`}).join(''):'<div class="vacio">Escribí el primer mensaje 👋</div>';
+  if(cerca||primero)b.scrollTop=b.scrollHeight;primero=false;
+}
+$('#msgs').onclick=async e=>{
+  const m=e.target.closest('.m');if(!m)return;
+  const a=e.target.closest('[data-a]');
+  if(!a){const x=m.querySelector('.ac');document.querySelectorAll('.ac').forEach(y=>{if(y!==x)y.hidden=true});x.hidden=!x.hidden;return}
+  const g=msgs.find(z=>z.id===m.dataset.id);if(!g)return;
+  try{
+    if(a.dataset.a==='del'){await deleteDoc(doc(db,'salas',cur,'mensajes',g.id));toast('Mensaje eliminado')}
+    else{await addDoc(collection(db,'reportes'),{sala:cur,msg:g.id,de:g.nick,texto:g.texto,por:me.nick,t:Date.now()});toast('Gracias, lo vamos a revisar')}
+  }catch(x){toast('No se pudo completar')}
+};
+async function enviar(){
+  const i=$('#txt'),t=i.value.trim().slice(0,500);if(!t||Date.now()-ultimo<600)return;
+  ultimo=Date.now();i.value='';
+  try{
+    await addDoc(collection(db,'salas',cur,'mensajes'),{nick:me.nick,uid:me.uid,texto:t,t:Date.now()});
+    await setDoc(doc(db,'salas',cur),{ultimo:{nick:me.nick,texto:t.slice(0,60),t:Date.now()}},{merge:true});
+  }catch(e){console.error(e);toast('No se pudo enviar');i.value=t}
+}
+$('#env').onclick=enviar;$('#txt').onkeydown=e=>{if(e.key==='Enter')enviar()};
+$('#atras').onclick=()=>history.back();
+addEventListener('popstate',()=>{if(cur)cerrar()});
+$('#ctit').onclick=()=>{if(curS&&curS.tipo==='grupo'){navigator.clipboard&&navigator.clipboard.writeText(cur).then(()=>toast('Código copiado: '+cur)).catch(()=>{})}};
+
+/* ===== Nuevo chat / grupo / código ===== */
+function pedir(tit,ph,cb,ml=20){
+  $('#pt').textContent=tit;const i=$('#pi');i.value='';i.placeholder=ph;i.maxLength=ml;$('#pe').textContent='';$('#dlg').showModal();setTimeout(()=>i.focus(),60);
+  const ok=async()=>{const v=i.value.trim();if(!v)return;let r;try{r=await cb(v)}catch(e){console.error(e);r='Ocurrió un error. Probá de nuevo.'}if(r)$('#pe').textContent=r;else $('#dlg').close()};
+  $('#pok').onclick=ok;i.onkeydown=e=>{if(e.key==='Enter')ok()};
+}
+$('#pno').onclick=()=>$('#dlg').close();
+$('#mas').onclick=()=>$('#menu').showModal();
+const cod=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s};
+$('#menu').onclick=async e=>{
+  const b=e.target.closest('[data-m]');if(!b)return;$('#menu').close();const m=b.dataset.m,yo=K(me.nick);
+  if(m==='dm')pedir('Nombre de usuario de la persona','Ej: lucia_g',async n=>{
+    const k=K(n);if(k===yo)return 'Ese sos vos 😄';
+    const u=await getDoc(doc(db,'usuarios',k));if(!u.exists())return 'No existe ese usuario.';
+    const id=[yo,k].sort().join('__'),nicks={[yo]:me.nick,[k]:u.data().nick};
+    await setDoc(doc(db,'salas',id),{tipo:'dm',miembros:arrayUnion(yo,k),nicks},{merge:true});
+    abrir(id,{id,tipo:'dm',miembros:[yo,k],nicks});
+  });
+  if(m==='grupo')pedir('Nombre del grupo','Ej: Amigos del cole',async n=>{
+    const id=cod();await setDoc(doc(db,'salas',id),{tipo:'grupo',nombre:n,miembros:[yo],creado:Date.now()});
+    abrir(id,{id,tipo:'grupo',nombre:n,miembros:[yo]});toast('Compartí el código '+id+' para que se unan');
+  },30);
+  if(m==='unir')pedir('Código del grupo','Ej: K7M2PQ',async c=>{
+    c=c.toUpperCase();const r=doc(db,'salas',c),s=await getDoc(r);
+    if(!s.exists()||s.data().tipo!=='grupo')return 'No encontramos ese grupo.';
+    await updateDoc(r,{miembros:arrayUnion(yo)});abrir(c,{id:c,...s.data()});
+  },6);
+  if(m==='salir'&&confirm('¿Cerrar sesión? Podés volver a entrar con el mismo nombre en este celular.')){try{localStorage.removeItem('hb_me')}catch(x){}location.reload()}
+};
+
+if(me)iniciar();else ver('login');
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
