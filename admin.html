@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Hablemos · Administración</title>
+<style>
+:root{--bg:#0b0b0c;--sf:#141416;--tx:#f2f2f3;--mu:#8e8e93;--ln:#262629;--in:#1d1d20;--gr:#3a3a3f;--rd:#d93636}
+@media(prefers-color-scheme:light){:root{--bg:#f2f2f4;--sf:#fff;--tx:#111;--mu:#6b6b70;--ln:#e3e3e6;--in:#efeff1;--gr:#1c1c1e}}
+*{box-sizing:border-box}body{margin:0;font:clamp(14px,.4vw + 12px,16px)/1.4 'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+[hidden]{display:none!important}button,input{font:inherit;color:inherit}
+.f{width:100%;padding:11px 13px;background:var(--in);border:1px solid var(--ln);border-radius:10px;margin:5px 0;font-size:max(16px,1em)}
+.b{border:0;border-radius:9px;padding:8px 12px;background:var(--gr);color:#fff;cursor:pointer;font-weight:600}.b.r{background:var(--rd)}.b.g{background:var(--in);color:var(--tx)}.b.on{outline:2px solid var(--tx)}
+#lg{min-height:100dvh;display:grid;place-items:center;padding:16px}.card{background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:22px;width:min(380px,100%)}.card h1{margin:0 0 6px}
+.err{color:#ff6b6b;min-height:1.3em}.mu{color:var(--mu)}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--sf);border-bottom:1px solid var(--ln);position:sticky;top:0;z-index:5}
+header h1{font-size:1.1rem;margin:0;flex:1 1 140px}nav{display:flex;gap:6px;flex-wrap:wrap}
+main{padding:14px;max-width:1100px;margin:auto}
+.it{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.it .t{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}.it small{color:var(--mu);display:block}.act{display:flex;gap:6px;flex-wrap:wrap}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--in);font-size:.75rem;margin-left:4px}.tag.r{background:var(--rd);color:#fff}
+dialog{border:1px solid var(--ln);border-radius:16px;width:min(560px,94vw);max-height:90dvh;overflow:auto;padding:16px;background:var(--sf);color:var(--tx)}dialog::backdrop{background:#0009}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:99px;z-index:99;max-width:90%}
+</style>
+</head>
+<body>
+<section id="lg"><div class="card"><h1>Administración</h1><p class="mu">Solo para administradores de Hablemos.</p>
+<input class="f" id="u" placeholder="Usuario" autocomplete="off" autocapitalize="none"><input class="f" id="p" type="password" placeholder="Contraseña" autocomplete="current-password">
+<p class="err" id="e"></p><button class="b" id="go" style="width:100%">Entrar</button></div></section>
+<div id="ap" hidden>
+<header><h1>🛡️ Hablemos · Admin</h1><nav id="nv"></nav><button class="b g" id="sal">Salir</button></header>
+<main><input class="f" id="q" placeholder="Filtrar esta lista" hidden><div id="c"></div></main></div>
+<dialog id="v"></dialog>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,collection,doc,getDoc,getDocs,addDoc,updateDoc,deleteDoc,deleteField,query,orderBy,limit,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const db=getFirestore(initializeApp({apiKey:"AIzaSyDaJT2oM4y2YaPM5i5XlZ6MWRWKNJI6-nI",authDomain:"buffet-4p.firebaseapp.com",projectId:"buffet-4p",storageBucket:"buffet-4p.firebasestorage.app",messagingSenderId:"925951291927",appId:"1:925951291927:web:a13f6762d25a0713c56252"}));
+const $=s=>document.querySelector(s),K=n=>n.toLowerCase();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hora=t=>t?new Date(t).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}):'—';
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2800)}
+async function hash(p,k){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('hablemos:'+k+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+let yo=null,tab='rep';
+const TABS={rep:'🚩 Reportes',usr:'👥 Usuarios',chat:'💬 Chats',est:'🌈 Estados',reg:'📜 Registro'};
+const vacio='<p class="mu">No hay nada para mostrar.</p>';
+async function log(a,o){try{await addDoc(collection(db,'registro'),{admin:yo.nick,accion:a,obj:String(o||''),t:Date.now()})}catch(e){}}
+const btn=(a,t,d,c='g')=>`<button class="b ${c}" data-a="${a}" ${Object.entries(d).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>${t}</button>`;
+
+/* ---- acceso ---- */
+$('#go').onclick=async()=>{
+  const n=$('#u').value.trim(),p=$('#p').value,e=$('#e');e.textContent='';if(!n||!p)return e.textContent='Completá usuario y contraseña.';
+  try{
+    const kn=K(n);let d=(await getDocs(query(collection(db,'usuarios'),where('nickK','==',kn)))).docs[0];
+    if(!d){const s=await getDoc(doc(db,'usuarios',kn));if(s.exists())d=s}
+    const x=d&&d.data();
+    if(!x||x.admin!==true||!x.ph||x.ph!==await hash(p,d.id))return e.textContent='Datos incorrectos o sin permiso de administrador.';
+    yo={nick:x.nick,key:d.id};$('#lg').hidden=true;$('#ap').hidden=false;$('#p').value='';log('inició sesión','');ir('rep');
+  }catch(x){e.textContent='No se pudo conectar ('+(x.code||x.message)+')'}
+};
+$('#p').onkeydown=e=>{if(e.key==='Enter')$('#go').click()};
+$('#sal').onclick=()=>location.reload();
+$('#nv').innerHTML=Object.entries(TABS).map(([k,v])=>`<button class="b g" data-t="${k}">${v}</button>`).join('');
+$('#nv').onclick=e=>{const b=e.target.closest('[data-t]');if(b)ir(b.dataset.t)};
+$('#q').oninput=()=>document.querySelectorAll('#c .it').forEach(i=>i.hidden=!i.textContent.toLowerCase().includes($('#q').value.toLowerCase()));
+
+/* ---- secciones ---- */
+const R={
+  async rep(){const s=await getDocs(query(collection(db,'reportes'),orderBy('t','desc'),limit(60)));
+    return s.docs.map(d=>{const x=d.data(),b={s:x.sala,m:x.msg,n:x.de,id:d.id};return `<div class="it"><div class="t"><b>${esc(x.de)}</b>: ${esc(x.texto)}<small>Reportó ${esc(x.por)} · ${hora(x.t)} · sala ${esc(x.sala)}</small></div><div class="act">${btn('ver','Ver últimos 10',b)}${btn('delm','Borrar mensaje',b,'r')}${btn('susp','Suspender autor',b,'r')}${btn('desc','Descartar',b)}</div></div>`}).join('')||vacio},
+  async usr(){const s=await getDocs(query(collection(db,'usuarios'),limit(400)));
+    return s.docs.map(d=>{const x=d.data(),b={k:d.id};return `<div class="it"><div class="t"><b>${esc(x.nick||d.id)}</b>${x.admin?'<span class="tag">admin</span>':''}${x.baneado?'<span class="tag r">suspendido</span>':''}<small>📞 ${esc(x.num||'—')} · última vez ${hora(x.visto)} · ${x.ph?'con contraseña':'sin contraseña'}</small></div><div class="act">${btn('ban',x.baneado?'Reactivar':'Suspender',b,x.baneado?'g':'r')}${btn('adm',x.admin?'Quitar admin':'Hacer admin',b)}${x.foto?btn('foto','Quitar foto',b):''}${btn('bio','Borrar info',b)}</div></div>`}).join('')||vacio},
+  async chat(){const s=await getDocs(query(collection(db,'salas'),limit(400)));
+    return s.docs.filter(d=>['general','grupo','dm'].includes(d.data().tipo)).map(d=>{const x=d.data(),b={s:d.id},t=x.tipo==='dm'?Object.values(x.nicks||{}).join(' ↔ '):(x.nombre||'General');return `<div class="it"><div class="t"><b>${esc(t)}</b><span class="tag">${esc(x.tipo)}</span><small>${esc(d.id)}${x.ultimo?' · último: '+esc(x.ultimo.nick)+': '+esc(x.ultimo.texto):''}</small></div><div class="act">${btn('ver','Ver últimos 10',b)}${x.tipo==='grupo'?btn('delc','Eliminar grupo',b,'r'):''}</div></div>`}).join('')||vacio},
+  async est(){const s=await getDocs(query(collection(db,'salas'),where('cat','==','estado'),limit(200)));
+    return s.docs.map(d=>{const x=d.data();return `<div class="it"><div class="t"><b>${esc(x.nick)}</b> ${esc(x.tipo==='img'?'📷 '+(x.texto||'foto'):x.texto)}<small>${hora(x.t)} · vence ${hora(x.exp)}</small></div><div class="act">${btn('dele','Eliminar',{id:d.id},'r')}</div></div>`}).join('')||vacio},
+  async reg(){const s=await getDocs(query(collection(db,'registro'),orderBy('t','desc'),limit(80)));
+    return s.docs.map(d=>{const x=d.data();return `<div class="it"><div class="t"><b>${esc(x.admin)}</b> ${esc(x.accion)} ${esc(x.obj)}<small>${hora(x.t)}</small></div></div>`}).join('')||vacio}
+};
+async function ir(t){tab=t;document.querySelectorAll('#nv .b').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('#q').hidden=!['usr','chat','rep'].includes(t);$('#q').value='';
+  $('#c').innerHTML='<p class="mu">Cargando…</p>';
+  try{$('#c').innerHTML=await R[t]()}catch(e){console.error(e);$('#c').innerHTML='<p class="err">No se pudo cargar ('+esc(e.code||e.message)+'). Revisá las reglas de Firestore.</p>'}}
+
+/* ---- últimos 10 mensajes ---- */
+async function ver(sala){
+  const s=await getDocs(query(collection(db,'salas',sala,'mensajes'),orderBy('t','desc'),limit(10)));
+  $('#v').innerHTML=`<b>Últimos 10 mensajes</b> <span class="mu">${esc(sala)}</span>`+(s.docs.reverse().map(d=>{const x=d.data(),adj=x.img?'📷 foto':x.aud?'🎤 nota de voz':x.fil?'📎 '+esc(x.fil.n):'';return `<div class="it"><div class="t"><b>${esc(x.nick)}</b>: ${esc(x.texto||'')} ${adj}<small>${hora(x.t)}${x.k?' · '+esc(x.k):''}</small></div><div class="act">${btn('delm','Borrar',{s:sala,m:d.id},'r')}${btn('susp','Suspender autor',{s:sala,m:d.id,n:x.nick,k:x.k||''},'r')}</div></div>`}).join('')||vacio)+'<button class="b g" id="vx" style="width:100%">Cerrar</button>';
+  $('#v').showModal();
+}
+async function claveDe(b){if(b.k)return b.k;
+  if(b.s&&b.m){const m=await getDoc(doc(db,'salas',b.s,'mensajes',b.m));if(m.exists()&&m.data().k)return m.data().k}
+  const d=(await getDocs(query(collection(db,'usuarios'),where('nickK','==',K(b.n||''))))).docs[0];return d?d.id:K(b.n||'')}
+
+/* ---- acciones ---- */
+async function acc(e){
+  const b=e.target.closest('[data-a]');if(e.target.id==='vx')return $('#v').close();if(!b)return;const a=b.dataset.a,d={...b.dataset};
+  try{
+    if(a==='ver')return ver(d.s);
+    if(a==='delm'){if(!confirm('¿Borrar este mensaje?'))return;await deleteDoc(doc(db,'salas',d.s,'mensajes',d.m));await log('borró mensaje',d.s+'/'+d.m);toast('Mensaje borrado');if($('#v').open)return ver(d.s)}
+    else if(a==='susp'||a==='ban'){const k=a==='ban'?d.k:await claveDe(d),u=await getDoc(doc(db,'usuarios',k));if(!u.exists())return toast('No se encontró al usuario');const s=!u.data().baneado;if(a==='susp'&&!confirm('¿Suspender a '+(u.data().nick||k)+'?'))return;await updateDoc(doc(db,'usuarios',k),{baneado:s});await log(s?'suspendió a':'reactivó a',k);toast(s?'Usuario suspendido':'Usuario reactivado')}
+    else if(a==='adm'){const u=await getDoc(doc(db,'usuarios',d.k)),s=!u.data().admin;if(!confirm((s?'¿Dar permisos de admin a ':'¿Quitar permisos de admin a ')+d.k+'?'))return;await updateDoc(doc(db,'usuarios',d.k),{admin:s});await log(s?'hizo admin a':'quitó admin a',d.k)}
+    else if(a==='foto'){await updateDoc(doc(db,'usuarios',d.k),{foto:''});await log('quitó la foto de',d.k)}
+    else if(a==='bio'){await updateDoc(doc(db,'usuarios',d.k),{bio:''});await log('borró la info de',d.k)}
+    else if(a==='desc'){await deleteDoc(doc(db,'reportes',d.id));await log('descartó reporte',d.id)}
+    else if(a==='delc'){if(!confirm('¿Eliminar este grupo para todos?'))return;await deleteDoc(doc(db,'salas',d.s));await log('eliminó grupo',d.s)}
+    else if(a==='dele'){await deleteDoc(doc(db,'salas',d.id));await log('eliminó estado',d.id)}
+    if(a==='delm'&&d.id)await deleteDoc(doc(db,'reportes',d.id)).catch(()=>{});
+    ir(tab);
+  }catch(x){console.error(x);toast('No se pudo completar ('+(x.code||x.message)+')')}
+}
+$('#c').onclick=acc;$('#v').onclick=acc;
+</script>
+</body>
+</html>
