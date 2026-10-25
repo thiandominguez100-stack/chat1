@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function D(){ return /databases/$(database)/documents; }
+    function signed(){ return request.auth != null; }
+    function miK(){ return get(/databases/$(database)/documents/uids/$(request.auth.uid)).data.k; }
+    function kAfter(){ return getAfter(/databases/$(database)/documents/uids/$(request.auth.uid)).data.k; }
+    function esAdmin(){ return signed() && exists(/databases/$(database)/documents/admins/$(miK())); }
+    function activo(){ return signed() && !get(/databases/$(database)/documents/usuarios/$(miK())).data.get('baneado', false); }
+    function memb(d){ return miK() in d.get('miembros', []) || miK() in d.get('par', []); }
+    function cambios(){ return request.resource.data.diff(resource.data).affectedKeys(); }
+    function miembro(s){
+      let d = get(/databases/$(database)/documents/salas/$(s)).data;
+      return d.get('tipo','') == 'general' || memb(d);
+    }
+
+    match /uids/{u} {
+      allow read: if signed() && (request.auth.uid == u || esAdmin());
+      allow create: if request.auth.uid == u
+        && request.resource.data.keys().hasOnly(['k','p'])
+        && request.auth.token.email == request.resource.data.k + '@hablemos.app'
+        && (!exists(/databases/$(database)/documents/usuarios/$(request.resource.data.k))
+            || (exists(/databases/$(database)/documents/secretos/$(request.resource.data.k))
+                && ((get(/databases/$(database)/documents/secretos/$(request.resource.data.k)).data.ph != ''
+                     && request.resource.data.get('p','') == get(/databases/$(database)/documents/secretos/$(request.resource.data.k)).data.ph)
+                 || (get(/databases/$(database)/documents/secretos/$(request.resource.data.k)).data.ph == ''
+                     && request.resource.data.get('p','') == get(/databases/$(database)/documents/secretos/$(request.resource.data.k)).data.uid))));
+      allow delete: if esAdmin();
+    }
+    match /secretos/{k} { allow read, write: if esAdmin(); }
+    match /admins/{k} {
+      allow read: if signed() && (esAdmin() || miK() == k);
+      allow write: if esAdmin();
+    }
+    match /nombres/{n} {
+      allow read: if true;
+      allow create: if esAdmin() || (signed() && n.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.keys().hasOnly(['k']) && request.resource.data.k == kAfter());
+      allow update: if esAdmin();
+      allow delete: if esAdmin() || (signed() && resource.data.k == miK());
+    }
+    match /usuarios/{k} {
+      allow read: if signed();
+      allow create: if signed() && k.matches('^[a-z0-9_]{3,20}$') && kAfter() == k
+        && request.resource.data.keys().hasOnly(['nick','nickK','creado'])
+        && request.resource.data.nickK == k && request.resource.data.nick.lower() == k;
+      allow update: if esAdmin() || (activo() && miK() == k
+        && cambios().hasOnly(['nick','nickK','visto','foto','emoji','bio','ag','bloq','fij','sil','arc','sinEstados','num'])
+        && (!('num' in cambios()) || !('num' in resource.data))
+        && request.resource.data.nickK == request.resource.data.nick.lower()
+        && request.resource.data.get('bio','').size() <= 80
+        && request.resource.data.get('foto','').size() < 100000);
+      allow delete: if esAdmin();
+    }
+    match /salas/{s} {
+      allow get: if signed() && (resource.data.get('tipo','') in ['general','grupo'] || memb(resource.data)
+                    || resource.data.get('cat','') == 'estado' || esAdmin());
+      allow list: if signed() && (resource.data.get('tipo','') == 'general' || memb(resource.data)
+                    || resource.data.get('cat','') == 'estado' || esAdmin());
+      allow create: if activo() && (
+           (s == 'general' && request.resource.data.tipo == 'general')
+        || (request.resource.data.tipo == 'grupo' && s.size() == 6 && request.resource.data.miembros == [miK()])
+        || (request.resource.data.tipo == 'dm' && s.split('__').size() == 2 && miK() in s.split('__')
+            && request.resource.data.miembros.toSet().difference(s.split('__').toSet()).size() == 0)
+        || (request.resource.data.get('cat','') == 'estado' && request.resource.data.key == miK()
+            && request.resource.data.exp <= request.time.toMillis() + 90000000)
+        || (s[0:5] == 'call_' && request.resource.data.de == miK() && miK() in request.resource.data.par));
+      allow update: if esAdmin() || (activo() && (
+           (resource.data.get('tipo','') == 'general' && cambios().hasOnly(['ultimo','tipo','nombre']))
+        || (resource.data.get('tipo','') == 'dm' && miK() in s.split('__')
+            && cambios().hasOnly(['ultimo','leido','escribe','temp','nicks','miembros','tipo'])
+            && request.resource.data.miembros.toSet().difference(s.split('__').toSet()).size() == 0)
+        || (resource.data.get('tipo','') == 'grupo' && miK() in resource.data.miembros
+            && cambios().hasOnly(['ultimo','leido','escribe','temp','nicks']))
+        || (resource.data.get('tipo','') == 'grupo' && cambios().hasOnly(['miembros'])
+            && request.resource.data.miembros.toSet().difference(resource.data.miembros.toSet()).hasOnly([miK()])
+            && resource.data.miembros.toSet().difference(request.resource.data.miembros.toSet()).size() == 0)
+        || (resource.data.get('cat','') == 'estado' && request.resource.data.key == resource.data.key
+            && (resource.data.key == miK() || cambios().hasOnly(['vistos'])))
+        || (miK() in resource.data.get('par', []) && cambios().hasOnly(['estado','answer']))));
+      allow delete: if esAdmin() || (resource.data.get('cat','') == 'estado' && resource.data.key == miK());
+
+      match /mensajes/{m} {
+        allow read: if signed() && (miembro(s) || esAdmin());
+        allow create: if activo() && (
+             (miembro(s) && request.resource.data.k == miK() && request.resource.data.uid == request.auth.uid
+              && request.resource.data.get('texto','').size() <= 500)
+          || (s[0:5] == 'call_' && request.resource.data.keys().hasOnly(['de','c']) && request.resource.data.de == miK()));
+        allow update: if activo() && miembro(s) && (
+             (resource.data.get('k','') == miK() && cambios().hasOnly(['texto','edit']))
+          || cambios().hasOnly(['reac']));
+        allow delete: if esAdmin() || resource.data.get('k','') == miK();
+      }
+    }
+    match /reportes/{r} {
+      allow create: if activo() && request.resource.data.keys().hasOnly(['sala','msg','de','texto','por','t']);
+      allow read, delete: if esAdmin();
+    }
+    match /registro/{r} { allow read, create: if esAdmin(); }
+  }
+}

@@ -34,8 +34,9 @@ dialog{border:1px solid var(--ln);border-radius:16px;width:min(560px,94vw);max-h
 <dialog id="v"></dialog>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {getFirestore,collection,doc,getDoc,getDocs,addDoc,updateDoc,deleteDoc,deleteField,query,orderBy,limit,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-const db=getFirestore(initializeApp({apiKey:"AIzaSyDaJT2oM4y2YaPM5i5XlZ6MWRWKNJI6-nI",authDomain:"buffet-4p.firebaseapp.com",projectId:"buffet-4p",storageBucket:"buffet-4p.firebasestorage.app",messagingSenderId:"925951291927",appId:"1:925951291927:web:a13f6762d25a0713c56252"}));
+import {getFirestore,collection,doc,getDoc,getDocs,addDoc,setDoc,updateDoc,deleteDoc,deleteField,query,orderBy,limit,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getAuth,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+const ap0=initializeApp({apiKey:"AIzaSyDaJT2oM4y2YaPM5i5XlZ6MWRWKNJI6-nI",authDomain:"buffet-4p.firebaseapp.com",projectId:"buffet-4p",storageBucket:"buffet-4p.firebasestorage.app",messagingSenderId:"925951291927",appId:"1:925951291927:web:a13f6762d25a0713c56252"});const db=getFirestore(ap0),auth=getAuth(ap0);
 const $=s=>document.querySelector(s),K=n=>n.toLowerCase();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hora=t=>t?new Date(t).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}):'—';
@@ -51,15 +52,16 @@ const btn=(a,t,d,c='g')=>`<button class="b ${c}" data-a="${a}" ${Object.entries(
 $('#go').onclick=async()=>{
   const n=$('#u').value.trim(),p=$('#p').value,e=$('#e');e.textContent='';if(!n||!p)return e.textContent='Completá usuario y contraseña.';
   try{
-    const kn=K(n);let d=(await getDocs(query(collection(db,'usuarios'),where('nickK','==',kn)))).docs[0];
-    if(!d){const s=await getDoc(doc(db,'usuarios',kn));if(s.exists())d=s}
-    const x=d&&d.data();
-    if(!x||x.admin!==true||!x.ph||x.ph!==await hash(p,d.id))return e.textContent='Datos incorrectos o sin permiso de administrador.';
-    yo={nick:x.nick,key:d.id};$('#lg').hidden=true;$('#ap').hidden=false;$('#p').value='';log('inició sesión','');ir('rep');
-  }catch(x){e.textContent='No se pudo conectar ('+(x.code||x.message)+')'}
+    let kn=K(n);try{const nb=await getDoc(doc(db,'nombres',kn));if(nb.exists())kn=nb.data().k}catch(x){}
+    const c=await signInWithEmailAndPassword(auth,kn+'@hablemos.app',p);
+    const m=await getDoc(doc(db,'uids',c.user.uid)),k=m.exists()&&m.data().k,ad=k&&await getDoc(doc(db,'admins',k));
+    if(!ad||!ad.exists()){await signOut(auth);return e.textContent='Datos incorrectos o sin permiso de administrador.'}
+    const u=(await getDoc(doc(db,'usuarios',k))).data()||{};
+    yo={nick:u.nick||k,key:k};$('#lg').hidden=true;$('#ap').hidden=false;$('#p').value='';log('inició sesión','');ir('rep');
+  }catch(x){e.textContent='Datos incorrectos o sin conexión ('+(x.code||x.message)+')'}
 };
 $('#p').onkeydown=e=>{if(e.key==='Enter')$('#go').click()};
-$('#sal').onclick=()=>location.reload();
+$('#sal').onclick=()=>signOut(auth).finally(()=>location.reload());
 $('#nv').innerHTML=Object.entries(TABS).map(([k,v])=>`<button class="b g" data-t="${k}">${v}</button>`).join('');
 $('#nv').onclick=e=>{const b=e.target.closest('[data-t]');if(b)ir(b.dataset.t)};
 $('#q').oninput=()=>document.querySelectorAll('#c .it').forEach(i=>i.hidden=!i.textContent.toLowerCase().includes($('#q').value.toLowerCase()));
@@ -68,8 +70,7 @@ $('#q').oninput=()=>document.querySelectorAll('#c .it').forEach(i=>i.hidden=!i.t
 const R={
   async rep(){const s=await getDocs(query(collection(db,'reportes'),orderBy('t','desc'),limit(60)));
     return s.docs.map(d=>{const x=d.data(),b={s:x.sala,m:x.msg,n:x.de,id:d.id};return `<div class="it"><div class="t"><b>${esc(x.de)}</b>: ${esc(x.texto)}<small>Reportó ${esc(x.por)} · ${hora(x.t)} · sala ${esc(x.sala)}</small></div><div class="act">${btn('ver','Ver últimos 10',b)}${btn('delm','Borrar mensaje',b,'r')}${btn('susp','Suspender autor',b,'r')}${btn('desc','Descartar',b)}</div></div>`}).join('')||vacio},
-  async usr(){const s=await getDocs(query(collection(db,'usuarios'),limit(400)));
-    return s.docs.map(d=>{const x=d.data(),b={k:d.id};return `<div class="it"><div class="t"><b>${esc(x.nick||d.id)}</b>${x.admin?'<span class="tag">admin</span>':''}${x.baneado?'<span class="tag r">suspendido</span>':''}<small>📞 ${esc(x.num||'—')} · última vez ${hora(x.visto)} · ${x.ph?'con contraseña':'sin contraseña'}</small></div><div class="act">${btn('ban',x.baneado?'Reactivar':'Suspender',b,x.baneado?'g':'r')}${btn('adm',x.admin?'Quitar admin':'Hacer admin',b)}${x.foto?btn('foto','Quitar foto',b):''}${btn('bio','Borrar info',b)}</div></div>`}).join('')||vacio},
+  async usr(){const s=await getDocs(query(collection(db,'usuarios'),limit(400))),ad=new Set((await getDocs(collection(db,'admins'))).docs.map(d=>d.id));return '<div class="it"><div class="t"><b>Migración de seguridad</b><small>Mueve las contraseñas viejas a un lugar privado. Ejecutalo una sola vez.</small></div><div class="act"><button class="b r" data-a="mig">Proteger ahora</button></div></div>'+s.docs.map(d=>{const x=d.data(),b={k:d.id};return `<div class="it"><div class="t"><b>${esc(x.nick||d.id)}</b>${ad.has(d.id)?'<span class="tag">admin</span>':''}${x.baneado?'<span class="tag r">suspendido</span>':''}<small>📞 ${esc(x.num||'—')} · última vez ${hora(x.visto)}</small></div><div class="act">${btn('ban',x.baneado?'Reactivar':'Suspender',b,x.baneado?'g':'r')}${btn('adm',ad.has(d.id)?'Quitar admin':'Hacer admin',b)}${x.foto?btn('foto','Quitar foto',b):''}${btn('bio','Borrar info',b)}</div></div>`}).join('')||vacio},
   async chat(){const s=await getDocs(query(collection(db,'salas'),limit(400)));
     return s.docs.filter(d=>['general','grupo','dm'].includes(d.data().tipo)).map(d=>{const x=d.data(),b={s:d.id},t=x.tipo==='dm'?Object.values(x.nicks||{}).join(' ↔ '):(x.nombre||'General');return `<div class="it"><div class="t"><b>${esc(t)}</b><span class="tag">${esc(x.tipo)}</span><small>${esc(d.id)}${x.ultimo?' · último: '+esc(x.ultimo.nick)+': '+esc(x.ultimo.texto):''}</small></div><div class="act">${btn('ver','Ver últimos 10',b)}${x.tipo==='grupo'?btn('delc','Eliminar grupo',b,'r'):''}</div></div>`}).join('')||vacio},
   async est(){const s=await getDocs(query(collection(db,'salas'),where('cat','==','estado'),limit(200)));
@@ -98,7 +99,8 @@ async function acc(e){
     if(a==='ver')return ver(d.s);
     if(a==='delm'){if(!confirm('¿Borrar este mensaje?'))return;await deleteDoc(doc(db,'salas',d.s,'mensajes',d.m));await log('borró mensaje',d.s+'/'+d.m);toast('Mensaje borrado');if($('#v').open)return ver(d.s)}
     else if(a==='susp'||a==='ban'){const k=a==='ban'?d.k:await claveDe(d),u=await getDoc(doc(db,'usuarios',k));if(!u.exists())return toast('No se encontró al usuario');const s=!u.data().baneado;if(a==='susp'&&!confirm('¿Suspender a '+(u.data().nick||k)+'?'))return;await updateDoc(doc(db,'usuarios',k),{baneado:s});await log(s?'suspendió a':'reactivó a',k);toast(s?'Usuario suspendido':'Usuario reactivado')}
-    else if(a==='adm'){const u=await getDoc(doc(db,'usuarios',d.k)),s=!u.data().admin;if(!confirm((s?'¿Dar permisos de admin a ':'¿Quitar permisos de admin a ')+d.k+'?'))return;await updateDoc(doc(db,'usuarios',d.k),{admin:s});await log(s?'hizo admin a':'quitó admin a',d.k)}
+    else if(a==='mig'){if(!confirm('¿Mover las contraseñas antiguas a un lugar privado?'))return;let c=0;for(const u of (await getDocs(collection(db,'usuarios'))).docs){const x=u.data();if(x.ph||x.uid)await setDoc(doc(db,'secretos',u.id),{ph:x.ph||'',uid:x.uid||''});if(x.nickK)await setDoc(doc(db,'nombres',x.nickK),{k:u.id});if('ph' in x||'uid' in x)await updateDoc(doc(db,'usuarios',u.id),{ph:deleteField(),uid:deleteField()});c++}await log('protegió contraseñas',c);toast('Listo: '+c+' cuentas')}
+    else if(a==='adm'){const ya=(await getDoc(doc(db,'admins',d.k))).exists();if(!confirm((ya?'¿Quitar permisos de admin a ':'¿Dar permisos de admin a ')+d.k+'?'))return;ya?await deleteDoc(doc(db,'admins',d.k)):await setDoc(doc(db,'admins',d.k),{t:Date.now()});await log(ya?'quitó admin a':'hizo admin a',d.k)}
     else if(a==='foto'){await updateDoc(doc(db,'usuarios',d.k),{foto:''});await log('quitó la foto de',d.k)}
     else if(a==='bio'){await updateDoc(doc(db,'usuarios',d.k),{bio:''});await log('borró la info de',d.k)}
     else if(a==='desc'){await deleteDoc(doc(db,'reportes',d.id));await log('descartó reporte',d.id)}

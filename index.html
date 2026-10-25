@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src https://*.firebaseapp.com; object-src 'none'; base-uri 'none'">
 <meta name="theme-color" content="#0b0b0c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -157,15 +158,17 @@ html[data-p=xs] .comp .ib{width:32px}html[data-p=xs] .comp{gap:4px;padding-left:
 <dialog id="opc"></dialog>
 <dialog id="menu"><b>Nuevo</b>
   <button class="btn" data-m="dm">💬 Chat por número (o usuario)</button><button class="btn" data-m="grupo">👥 Crear un grupo</button><button class="btn" data-m="unir">🔑 Unirme con código</button><button class="btn g" data-m="x">Cancelar</button></dialog>
-<dialog id="dlg"><b id="pt"></b><input class="f" id="pi" autocomplete="off"><p class="err" id="pe"></p><button class="btn" id="pok">Aceptar</button><button class="btn g" id="pno">Cancelar</button></dialog>
+<dialog id="dlg"><b id="dt"></b><input class="f" id="pi" autocomplete="off"><p class="err" id="pe"></p><button class="btn" id="pok">Aceptar</button><button class="btn g" id="pno">Cancelar</button></dialog>
 <dialog id="nes"><b>Nuevo estado</b><textarea class="f" id="et" maxlength="140" rows="4" placeholder="¿Qué estás pensando?"></textarea>
   <div class="sw" id="esw"></div><button class="btn" id="epub">Publicar texto</button><button class="btn g" id="efoto">📷 Subir una foto</button><button class="btn g" id="eno">Cancelar</button></dialog>
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,getDoc,getDocs,setDoc,deleteField,arrayRemove,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limitToLast,where,arrayUnion} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,getDoc,getDocs,setDoc,deleteField,arrayRemove,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limitToLast,where,arrayUnion,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,onAuthStateChanged,signOut,deleteUser,updatePassword} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 const FIREBASE={apiKey:"AIzaSyDaJT2oM4y2YaPM5i5XlZ6MWRWKNJI6-nI",authDomain:"buffet-4p.firebaseapp.com",projectId:"buffet-4p",storageBucket:"buffet-4p.firebasestorage.app",messagingSenderId:"925951291927",appId:"1:925951291927:web:a13f6762d25a0713c56252"};
 const app0=initializeApp(FIREBASE);let db;try{db=initializeFirestore(app0,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}catch(e){db=getFirestore(app0)}
+const auth=getAuth(app0),EM=k=>k+"@hablemos.app";let started=false;
 
 const $=s=>document.querySelector(s),K=n=>n.toLowerCase();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -202,28 +205,33 @@ const uid=()=>{let u=ls('hb_uid',null);if(!u){u=crypto.randomUUID();sv('hb_uid',
 
 /* ===== Entrar ===== */
 $('#entrar').onclick=async()=>{
-  const n=$('#nick').value.trim(),e=$('#lerr');
+  const n=$('#nick').value.trim(),cl=$('#clave').value,e=$('#lerr');e.textContent='';
   if(!/^\w{3,20}$/.test(n))return e.textContent='Usá 3 a 20 letras, números o _ (sin espacios ni tildes).';
+  if(cl.length<6)return e.textContent='La contraseña debe tener al menos 6 caracteres.';
+  $('#entrar').disabled=true;
   try{
-    let u=uid();const kn=K(n),cl=$('#clave').value;
-    if(Date.now()<ls('hb_lock',0))return e.textContent='Demasiados intentos. Esperá 30 segundos.';
-    let d=(await getDocs(query(collection(db,'usuarios'),where('nickK','==',kn)))).docs[0];
-    if(!d){const s=await getDoc(doc(db,'usuarios',kn));if(s.exists())d=s}
-    if(d){const x=d.data();
-      if(x.baneado)return e.textContent='Tu cuenta fue suspendida por un administrador.';
-      if(x.ph){
-        if(await hash(cl,d.id)!==x.ph){const f=ls('hb_f',0)+1;sv('hb_f',f>=5?0:f);if(f>=5)sv('hb_lock',Date.now()+30000);return e.textContent='Contraseña incorrecta.'}
-        sv('hb_f',0);u=x.uid||u;sv('hb_uid',u);
-      }else if(x.uid!==u)return e.textContent='Ese nombre ya está en uso. Probá otro.';
-      me={nick:x.nick||n,key:d.id,uid:u};
-      if(K(me.nick)!==kn)toast('Esa es tu cuenta, ahora se llama '+me.nick);
-    }else{
-      if(!/\D/.test(n))return e.textContent='El nombre no puede ser solo números (se confundiría con un número de contacto).';
-      if(cl.length<6)return e.textContent='Creá una contraseña de al menos 6 caracteres.';
-      await setDoc(doc(db,'usuarios',kn),{nick:n,nickK:kn,uid:u,ph:await hash(cl,kn),creado:Date.now()},{merge:true});me={nick:n,key:kn,uid:u};
+    let kn=K(n);try{const nb=await getDoc(doc(db,'nombres',kn));if(nb.exists())kn=nb.data().k}catch(x){}
+    let cred,nuevo=false;
+    try{cred=await signInWithEmailAndPassword(auth,EM(kn),cl)}
+    catch(x){
+      if(!/invalid-credential|user-not-found|wrong-password|invalid-login/.test(x.code||''))throw x;
+      try{cred=await createUserWithEmailAndPassword(auth,EM(kn),cl);nuevo=true}
+      catch(y){if(y.code==='auth/email-already-in-use')return e.textContent='Contraseña incorrecta.';throw y}
     }
-    $('#clave').value='';sv('hb_me',me);iniciar();
-  }catch(x){console.error(x);e.textContent='No se pudo conectar. Revisá tu internet y las reglas de Firebase.'}
+    const au=cred.user.uid;let k=kn,ex=null;
+    if(nuevo){
+      try{
+        ex=await getDoc(doc(db,'usuarios',kn));
+        if(ex.exists()){try{await setDoc(doc(db,'uids',au),{k:kn,p:await hash(cl,kn)})}catch(z){await setDoc(doc(db,'uids',au),{k:kn,p:String(ls('hb_uid','')||'')})}}
+        else{if(!/\D/.test(n))throw{code:'solo-num'};const b=writeBatch(db);b.set(doc(db,'uids',au),{k:kn});b.set(doc(db,'usuarios',kn),{nick:n,nickK:kn,creado:Date.now()});b.set(doc(db,'nombres',kn),{k:kn});await b.commit()}
+      }catch(y){await deleteUser(cred.user).catch(()=>{});await signOut(auth).catch(()=>{});
+        return e.textContent=y.code==='solo-num'?'El nombre no puede ser solo números.':(ex&&ex.exists())?'Contraseña incorrecta.':'No se pudo crear la cuenta ('+(y.code||y.message)+')'}
+    }else{const m=await getDoc(doc(db,'uids',au));if(!m.exists()){await signOut(auth);return e.textContent='Cuenta sin vincular. Pedí ayuda a un administrador.'}k=m.data().k}
+    const x=(await getDoc(doc(db,'usuarios',k))).data()||{};
+    if(x.baneado){await signOut(auth);return e.textContent='Tu cuenta fue suspendida por un administrador.'}
+    me={nick:x.nick||n,key:k,uid:au};sv('hb_me',me);$('#clave').value='';started=true;iniciar();
+  }catch(x){console.error(x);e.textContent=x.code==='auth/too-many-requests'?'Demasiados intentos. Esperá unos minutos.':x.code==='auth/network-request-failed'?'Sin conexión.':'No se pudo conectar ('+(x.code||x.message)+')'}
+  finally{$('#entrar').disabled=false}
 };
 $('#nick').onkeydown=e=>{if(e.key==='Enter')$('#clave').focus()};$('#clave').onkeydown=e=>{if(e.key==='Enter')$('#entrar').click()};
 async function nuevoNum(){for(let i=0;i<8;i++){const n=String(Math.floor(1e8+Math.random()*9e8));const q=await getDocs(query(collection(db,'usuarios'),where('num','==',n)));if(q.empty)return n}throw new Error('sin-numero')}
@@ -238,7 +246,7 @@ async function iniciar(){
     if(!u.num){u.num=await nuevoNum();await setDoc(r,{num:u.num},{merge:true})}
     if(!u.nickK)setDoc(r,{nickK:K(u.nick||me.nick)},{merge:true}).catch(()=>{});
   }catch(e){console.error(e);u.num=u.num||'';toast('Faltan permisos en Firebase: publicá las reglas nuevas')}
-  const g=n=>(n in u)?(u[n]||[]):(me[n]||[]);me={...me,bloq:g('bloq'),fij:g('fij'),sil:g('sil'),arc:g('arc'),nick:u.nick||me.nick,num:u.num||me.num||'',emoji:u.emoji||me.emoji||'',bio:u.bio||me.bio||'',foto:('foto' in u)?(u.foto||''):(me.foto||''),ag:u.ag||me.ag||{},sinEstados:u.sinEstados||me.sinEstados||[]};sv('hb_me',me);UF[me.key]={nick:me.nick,num:me.num,foto:me.foto};seguirU(me.key);updateDoc(doc(db,'usuarios',me.key),{visto:Date.now()}).catch(()=>{});if(u.nick&&!u.ph)setTimeout(clavePedir,700);pintarPerfil();pintarLista();pintarEst();pintarLlam();pintarAg();
+  const g=n=>(n in u)?(u[n]||[]):(me[n]||[]);me={...me,bloq:g('bloq'),fij:g('fij'),sil:g('sil'),arc:g('arc'),nick:u.nick||me.nick,num:u.num||me.num||'',emoji:u.emoji||me.emoji||'',bio:u.bio||me.bio||'',foto:('foto' in u)?(u.foto||''):(me.foto||''),ag:u.ag||me.ag||{},sinEstados:u.sinEstados||me.sinEstados||[]};sv('hb_me',me);UF[me.key]={nick:me.nick,num:me.num,foto:me.foto};seguirU(me.key);updateDoc(doc(db,'usuarios',me.key),{visto:Date.now()}).catch(()=>{});pintarPerfil();pintarLista();pintarEst();pintarLlam();pintarAg();
   const er=n=>e=>{console.error(n,e);toast('Error al cargar '+n+' ('+(e.code||e.message)+')')};
   setDoc(doc(db,'salas','general'),{tipo:'general',nombre:'General'},{merge:true}).catch(()=>{});
   onSnapshot(doc(db,'salas','general'),d=>{gen=d.data()||{};llegada('general',gen);pintarLista()},er('chats'));
@@ -291,7 +299,7 @@ const prevMsg=g=>(g.texto||(g.img?'📷 Foto':g.aud?'🎤 Nota de voz':g.fil?'�
 function pintar(){
   const b=$('#msgs'),cerca=b.scrollHeight-b.scrollTop-b.clientHeight<140,dm=curS.tipo==='dm',q=K($('#bqc').value||''),lei=((curS.leido||{})[dm?otroK(curS):'']||0);
   const vis=msgs.filter(m=>vivo(m)&&(!q||K((m.texto||'')+(m.nick||'')).includes(q)));
-  b.innerHTML=vis.length?vis.map(m=>{const yo=m.uid===me.uid,im=m.img&&String(m.img).startsWith('data:image/'),mk=m.k||K(m.nick||''),am=m.aud&&String(m.aud).startsWith('data:audio/'),fm=m.fil&&String((m.fil||{}).d||'').startsWith('data:');
+  b.innerHTML=vis.length?vis.map(m=>{const yo=m.k?m.k===me.key:m.uid===me.uid,im=m.img&&String(m.img).startsWith('data:image/'),mk=m.k||K(m.nick||''),am=m.aud&&String(m.aud).startsWith('data:audio/'),fm=m.fil&&String((m.fil||{}).d||'').startsWith('data:');
     const rc=Object.values(m.reac||{}),rs=rc.length?`<div class="rx">${[...new Set(rc)].map(x=>{const c=rc.filter(y=>y===x).length;return x+(c>1?c:'')}).join(' ')}</div>`:'',tk=yo&&dm?`<i class="tk${m.t<=lei?' ok':''}">${m.t<=lei?'✓✓':'✓'}</i>`:'';
     return `<div class="m${yo?' yo':''}" data-id="${m.id}">${!yo&&!dm?`<b data-nk="${esc(mk)}" style="cursor:pointer">${esc(nm(mk,m.nick))}</b>`:''}${m.resp?`<div class="rq"><b>${esc(m.resp.n)}</b>${esc(m.resp.t)}</div>`:''}${im?`<img class="mi" src="${esc(m.img)}" alt="foto">`:''}${am?`<audio controls src="${esc(m.aud)}"></audio>`:''}${fm?`<a class="fl" download="${esc(m.fil.n)}" href="${esc(m.fil.d)}">📎 ${esc(m.fil.n)}</a>`:''}${m.texto?`<span>${esc(m.texto)}</span>`:''}<small>${m.edit?'editado · ':''}${hora(m.t)}${tk}</small>${rs}<div class="ac" hidden><div class="rr">${REAC.map(x=>`<button data-r="${x}">${x}</button>`).join('')}</div><button data-a="resp">↩ Responder</button>${yo&&m.texto?'<button data-a="edit">✏️ Editar</button>':''}<button data-a="${yo?'del':'rep'}">${yo?'🗑️ Eliminar':'🚩 Reportar'}</button></div></div>`}).join(''):'<div class="vacio">'+(q?'Sin resultados':'Escribí el primer mensaje 👋')+'</div>';
   if(cerca||primero)b.scrollTop=b.scrollHeight;primero=false;
@@ -374,7 +382,7 @@ async function buscar(q){
   return null;
 }
 function pedir(tit,ph,cb,ml=20){
-  $('#pt').textContent=tit;const i=$('#pi');i.value='';i.placeholder=ph;i.maxLength=ml;$('#pe').textContent='';$('#dlg').showModal();setTimeout(()=>i.focus(),60);
+  $('#dt').textContent=tit;const i=$('#pi');i.value='';i.placeholder=ph;i.maxLength=ml;$('#pe').textContent='';$('#dlg').showModal();setTimeout(()=>i.focus(),60);
   const ok=async()=>{const v=i.value.trim();if(!v)return;let r;try{r=await cb(v)}catch(e){console.error(e);r='Ocurrió un error. Probá de nuevo.'}if(r)$('#pe').textContent=r;else $('#dlg').close()};
   $('#pok').onclick=ok;i.onkeydown=e=>{if(e.key==='Enter')ok()};
 }
@@ -504,7 +512,7 @@ $('#perf').onclick=async e=>{
   if(e.target.id==='gnum')return asignar();
   if(e.target.closest('#cnum')&&navigator.clipboard)navigator.clipboard.writeText(me.num).then(()=>toast('Número copiado')).catch(()=>{});
   const b=e.target.closest('[data-e]');if(b){me.emoji=b.dataset.e;sv('hb_me',me);pintarPerfil();updateDoc(doc(db,'usuarios',me.key),{emoji:me.emoji}).catch(()=>{})}
-  if(e.target.id==='salir'&&confirm('¿Cerrar sesión? Podés volver a entrar con tu nombre de usuario en este dispositivo.')){try{localStorage.removeItem('hb_me')}catch(x){}location.reload()}
+  if(e.target.id==='salir'&&confirm('¿Cerrar sesión?')){try{localStorage.removeItem('hb_me')}catch(x){}signOut(auth).finally(()=>location.reload())}
 };
 $('#perf').onchange=e=>{if(e.target.id==='bio'){me.bio=e.target.value.trim();sv('hb_me',me);updateDoc(doc(db,'usuarios',me.key),{bio:me.bio}).catch(()=>{})}};
 
@@ -562,7 +570,7 @@ setInterval(()=>{if(cur&&curS&&curS.temp){msgs.filter(m=>m.exp&&m.exp<Date.now()
 /* ===== Contraseña y pantalla adaptable ===== */
 async function hash(p,k){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('hablemos:'+k+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 function clavePedir(){
-  pedir('Elegí una contraseña para proteger tu cuenta','Mínimo 6 caracteres',async c=>{if(c.length<6)return 'Mínimo 6 caracteres.';await updateDoc(doc(db,'usuarios',me.key),{ph:await hash(c,me.key)});toast('Contraseña guardada')},40);
+  pedir('Elegí una contraseña para proteger tu cuenta','Mínimo 6 caracteres',async c=>{if(c.length<6)return 'Mínimo 6 caracteres.';try{await updatePassword(auth.currentUser,c)}catch(x){return x.code==='auth/requires-recent-login'?'Por seguridad, cerrá sesión, volvé a entrar y probá de nuevo.':'No se pudo cambiar ('+(x.code||x.message)+')'}toast('Contraseña guardada')},40);
   $('#pi').type='password';
 }
 $('#dlg').addEventListener('close',()=>{$('#pi').type='text'});
@@ -588,13 +596,13 @@ async function cambiarNick(v){
     if(q.docs.some(d=>d.id!==me.key))return 'Ese nombre ya está en uso. Probá otro.';
     if(kn!==me.key){const s=await getDoc(doc(db,'usuarios',kn));if(s.exists())return 'Ese nombre ya está en uso. Probá otro.'}
   }
-  await updateDoc(doc(db,'usuarios',me.key),{nick:n,nickK:kn});
+  await updateDoc(doc(db,'usuarios',me.key),{nick:n,nickK:kn});await setDoc(doc(db,'nombres',kn),{k:me.key}).catch(()=>{});if(K(ant)!==kn)await deleteDoc(doc(db,'nombres',K(ant))).catch(()=>{});
   const q2=await getDocs(query(collection(db,'usuarios'),where('nickK','==',kn)));
   if(q2.docs.some(d=>d.id!==me.key)){await updateDoc(doc(db,'usuarios',me.key),{nick:ant,nickK:K(ant)});return 'Justo alguien tomó ese nombre. Probá otro.'}
   me.nick=n;sv('hb_me',me);UF[me.key]={...(UF[me.key]||{}),nick:n};pintarPerfil();repintar();toast('Ahora sos '+n);
 }
 
-if(me)iniciar();else $('#login').hidden=false;
+onAuthStateChanged(auth,u=>{if(started)return;if(u&&me&&me.key){me.uid=u.uid;started=true;iniciar()}else $('#login').hidden=false});
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 </script>
 </body>
